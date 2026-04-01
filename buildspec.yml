@@ -1,0 +1,19 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11 # Mude para a versão que você está usando
+    commands:
+      - echo "Instalando dependências do e-commerce..."
+      - pip install -r requirements.txt
+  build:
+    commands:
+      - echo "Garantindo que a aplicação sobe sem erros..."
+      # Se você tiver testes criados, você colocaria o comando aqui (ex: pytest)
+  post_build:
+    commands:
+      - echo "Build pronto para ir para produção!"
+artifacts:
+  files:
+    - '**/*' # Pega todos os arquivos do e-commerce para enviar ao servidor

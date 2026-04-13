@@ -201,6 +201,14 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Databases
+*.db
+*.sqlite3
+
+# Python Virtual Environments
+venv/
+__pycache__/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

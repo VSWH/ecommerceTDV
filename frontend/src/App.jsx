@@ -3,6 +3,7 @@ import {
   Search,
   ShoppingCart,
   Plus,
+  Minus,
   Pencil,
   Trash2,
   X,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
+const ADMIN_PASSWORD = "123";
 
 const emptyProduct = {
   name: "",
@@ -37,6 +39,30 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [form, setForm] = useState(emptyProduct);
+
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  const [cartItems, setCartItems] = useState(() => {
+    try {
+      const storedCart = localStorage.getItem("tdv_cart");
+
+      if (storedCart) {
+        return JSON.parse(storedCart);
+      }
+
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [isAdmin, setIsAdmin] = useState(() => {
+    return localStorage.getItem("tdv_admin") === "true";
+  });
+
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminError, setAdminError] = useState("");
 
   async function fetchData() {
     try {
@@ -70,6 +96,10 @@ export default function App() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem("tdv_cart", JSON.stringify(cartItems));
+  }, [cartItems]);
+
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesSearch = product.name
@@ -84,6 +114,14 @@ export default function App() {
     });
   }, [products, search, selectedCategory]);
 
+  const cartCount = cartItems.reduce((total, item) => {
+    return total + item.quantity;
+  }, 0);
+
+  const cartTotal = cartItems.reduce((total, item) => {
+    return total + item.price * item.quantity;
+  }, 0);
+
   function getCategoryName(categoryId) {
     const category = categories.find((item) => item.id === categoryId);
     return category ? category.name : "Sem categoria";
@@ -94,6 +132,120 @@ export default function App() {
       style: "currency",
       currency: "BRL",
     });
+  }
+
+  function handleAdminLogin(event) {
+    event.preventDefault();
+
+    if (adminPassword === ADMIN_PASSWORD) {
+      setIsAdmin(true);
+      localStorage.setItem("tdv_admin", "true");
+      setShowAdminLogin(false);
+      setAdminPassword("");
+      setAdminError("");
+      return;
+    }
+
+    setAdminError("Senha incorreta. Tente novamente.");
+  }
+
+  function handleAdminLogout() {
+    setIsAdmin(false);
+    localStorage.removeItem("tdv_admin");
+    setAdminPassword("");
+    setAdminError("");
+    setShowForm(false);
+    setEditingProduct(null);
+  }
+
+  function addToCart(product) {
+    if (product.stock_quantity <= 0) {
+      alert("Produto sem estoque disponível.");
+      return;
+    }
+
+    setCartItems((currentItems) => {
+      const existingItem = currentItems.find((item) => item.id === product.id);
+
+      if (existingItem) {
+        return currentItems.map((item) => {
+          if (item.id === product.id) {
+            const nextQuantity = item.quantity + 1;
+
+            return {
+              ...item,
+              quantity:
+                nextQuantity > product.stock_quantity
+                  ? product.stock_quantity
+                  : nextQuantity,
+            };
+          }
+
+          return item;
+        });
+      }
+
+      return [
+        ...currentItems,
+        {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          image_url: product.image_url,
+          stock_quantity: product.stock_quantity,
+          quantity: 1,
+        },
+      ];
+    });
+
+    setIsCartOpen(true);
+  }
+
+  function increaseCartItem(productId) {
+    setCartItems((currentItems) =>
+      currentItems.map((item) => {
+        if (item.id === productId) {
+          const nextQuantity = item.quantity + 1;
+
+          return {
+            ...item,
+            quantity:
+              nextQuantity > item.stock_quantity
+                ? item.stock_quantity
+                : nextQuantity,
+          };
+        }
+
+        return item;
+      })
+    );
+  }
+
+  function decreaseCartItem(productId) {
+    setCartItems((currentItems) =>
+      currentItems
+        .map((item) => {
+          if (item.id === productId) {
+            return {
+              ...item,
+              quantity: item.quantity - 1,
+            };
+          }
+
+          return item;
+        })
+        .filter((item) => item.quantity > 0)
+    );
+  }
+
+  function removeCartItem(productId) {
+    setCartItems((currentItems) =>
+      currentItems.filter((item) => item.id !== productId)
+    );
+  }
+
+  function clearCart() {
+    setCartItems([]);
   }
 
   function openCreateForm() {
@@ -211,10 +363,37 @@ export default function App() {
             </div>
           </div>
 
-          <button className="flex items-center gap-2 rounded-2xl bg-yellow-400 px-4 py-2 text-sm font-bold text-black shadow-sm transition hover:bg-yellow-300">
-            <ShoppingCart size={18} />
-            Carrinho
-          </button>
+          <div className="flex items-center gap-3">
+            {isAdmin ? (
+              <button
+                onClick={handleAdminLogout}
+                className="rounded-2xl border border-yellow-400 px-4 py-2 text-sm font-bold text-yellow-400 transition hover:bg-yellow-400 hover:text-black"
+              >
+                Sair do admin
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowAdminLogin(true)}
+                className="rounded-2xl border border-yellow-400 px-4 py-2 text-sm font-bold text-yellow-400 transition hover:bg-yellow-400 hover:text-black"
+              >
+                Área Admin
+              </button>
+            )}
+
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative flex items-center gap-2 rounded-2xl bg-yellow-400 px-4 py-2 text-sm font-bold text-black shadow-sm transition hover:bg-yellow-300"
+            >
+              <ShoppingCart size={18} />
+              Carrinho
+
+              {cartCount > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-black text-black">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -279,7 +458,11 @@ export default function App() {
           </div>
         </section>
 
-        <section className="mb-6 grid gap-4 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_240px_auto]">
+        <section
+          className={`mb-6 grid gap-4 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm ${
+            isAdmin ? "md:grid-cols-[1fr_240px_auto]" : "md:grid-cols-[1fr_240px]"
+          }`}
+        >
           <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 px-4 py-3 focus-within:border-yellow-400">
             <Search size={20} className="text-zinc-400" />
             <input
@@ -304,14 +487,23 @@ export default function App() {
             ))}
           </select>
 
-          <button
-            onClick={openCreateForm}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-bold text-black transition hover:bg-yellow-300"
-          >
-            <Plus size={18} />
-            Novo produto
-          </button>
+          {isAdmin && (
+            <button
+              onClick={openCreateForm}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-bold text-black transition hover:bg-yellow-300"
+            >
+              <Plus size={18} />
+              Novo produto
+            </button>
+          )}
         </section>
+
+        {isAdmin && (
+          <div className="mb-6 rounded-2xl border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm font-bold text-yellow-900">
+            Modo administrador ativo. Você pode cadastrar, editar e excluir
+            produtos.
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -389,27 +581,32 @@ export default function App() {
                     </div>
                   </div>
 
-                  <button className="mb-3 w-full rounded-2xl bg-black px-4 py-3 text-sm font-bold text-yellow-400 transition hover:bg-zinc-800">
+                  <button
+                    onClick={() => addToCart(product)}
+                    className="mb-3 w-full rounded-2xl bg-black px-4 py-3 text-sm font-bold text-yellow-400 transition hover:bg-zinc-800"
+                  >
                     Comprar
                   </button>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => openEditForm(product)}
-                      className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-200 px-3 py-2 text-sm font-medium hover:bg-zinc-50"
-                    >
-                      <Pencil size={16} />
-                      Editar
-                    </button>
+                  {isAdmin && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => openEditForm(product)}
+                        className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-200 px-3 py-2 text-sm font-medium hover:bg-zinc-50"
+                      >
+                        <Pencil size={16} />
+                        Editar
+                      </button>
 
-                    <button
-                      onClick={() => handleDelete(product.id)}
-                      className="flex items-center justify-center gap-2 rounded-2xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 size={16} />
-                      Excluir
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="flex items-center justify-center gap-2 rounded-2xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 size={16} />
+                        Excluir
+                      </button>
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
@@ -417,7 +614,7 @@ export default function App() {
         )}
       </main>
 
-      {showForm && (
+      {showForm && isAdmin && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4">
           <form
             onSubmit={handleSubmit}
@@ -555,6 +752,183 @@ export default function App() {
                 Salvar
               </button>
             </div>
+          </form>
+        </div>
+      )}
+
+      {isCartOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/60">
+          <aside className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 p-5">
+              <div>
+                <h2 className="text-2xl font-black">Carrinho</h2>
+                <p className="text-sm text-zinc-500">
+                  {cartCount} item(ns) selecionado(s)
+                </p>
+              </div>
+
+              <button
+                onClick={() => setIsCartOpen(false)}
+                className="rounded-full p-2 hover:bg-zinc-100"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {cartItems.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+                <div className="mb-4 rounded-full bg-zinc-100 p-5">
+                  <ShoppingCart size={38} className="text-zinc-400" />
+                </div>
+
+                <h3 className="text-lg font-black">Seu carrinho está vazio</h3>
+
+                <p className="mt-2 text-sm text-zinc-500">
+                  Adicione produtos elétricos ao carrinho para simular uma
+                  compra.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                  {cartItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex gap-4 rounded-3xl border border-zinc-200 bg-white p-3 shadow-sm"
+                    >
+                      <div className="h-20 w-20 overflow-hidden rounded-2xl bg-zinc-100">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Package size={26} className="text-zinc-400" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-1 flex-col justify-between">
+                        <div>
+                          <h3 className="text-sm font-black">{item.name}</h3>
+
+                          <p className="mt-1 text-sm font-bold text-yellow-700">
+                            {formatPrice(item.price)}
+                          </p>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => decreaseCartItem(item.id)}
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 hover:bg-zinc-100"
+                            >
+                              <Minus size={14} />
+                            </button>
+
+                            <span className="w-6 text-center text-sm font-black">
+                              {item.quantity}
+                            </span>
+
+                            <button
+                              onClick={() => increaseCartItem(item.id)}
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 hover:bg-zinc-100"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+
+                          <button
+                            onClick={() => removeCartItem(item.id)}
+                            className="rounded-full p-2 text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-zinc-200 p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="text-sm font-bold text-zinc-500">
+                      Total
+                    </span>
+                    <span className="text-2xl font-black">
+                      {formatPrice(cartTotal)}
+                    </span>
+                  </div>
+
+                  <button className="mb-3 w-full rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-black text-black hover:bg-yellow-300">
+                    Finalizar compra
+                  </button>
+
+                  <button
+                    onClick={clearCart}
+                    className="w-full rounded-2xl border border-zinc-200 px-5 py-3 text-sm font-bold hover:bg-zinc-50"
+                  >
+                    Limpar carrinho
+                  </button>
+                </div>
+              </>
+            )}
+          </aside>
+        </div>
+      )}
+
+      {showAdminLogin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <form
+            onSubmit={handleAdminLogin}
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
+          >
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-black">Área Admin</h2>
+                <p className="text-sm text-zinc-500">
+                  Digite a senha para gerenciar produtos.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdminLogin(false);
+                  setAdminPassword("");
+                  setAdminError("");
+                }}
+                className="rounded-full p-2 hover:bg-zinc-100"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <label>
+              <span className="mb-1 block text-sm font-bold">Senha</span>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+                className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                placeholder="Digite a senha de administrador"
+              />
+            </label>
+
+            {adminError && (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {adminError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-black text-black hover:bg-yellow-300"
+            >
+              Entrar
+            </button>
           </form>
         </div>
       )}

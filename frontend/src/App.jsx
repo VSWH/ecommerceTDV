@@ -13,7 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "http://3.80.46.18:8000";
 const ADMIN_PASSWORD = "123";
 
 const emptyProduct = {
